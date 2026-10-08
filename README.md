@@ -2,11 +2,9 @@
 
 Press a hotkey, talk, and the text is pasted where your cursor is (terminals too). Runs **100% locally**, on **GPU or CPU**.
 
-<video src="https://github.com/Japulgarin/dictate/raw/main/docs/demo.mp4" poster="docs/demo.jpg" controls muted width="100%"></video>
+![Dictate demo](docs/demo.gif)
 
-[![Dictate demo](docs/demo.jpg)](https://github.com/Japulgarin/dictate/raw/main/docs/demo.mp4)
-
-▶ If the player above is empty, [open the demo video](https://github.com/Japulgarin/dictate/raw/main/docs/demo.mp4).
+▶ [Full quality video with sound](https://github.com/Japulgarin/dictate/raw/main/docs/demo.mp4)
 
 - Floating **bubble** shows state: 🎙 ready · ● listening · … transcribing · 📋 result (drag it, click it to open your notes)
 - Default hotkey **Ctrl + Win** (toggle: press to start, press again to stop)
