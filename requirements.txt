@@ -1,0 +1,7 @@
+PySide6
+pynput
+sounddevice
+numpy
+onnx-asr[hub]
+onnxruntime-gpu   # NVIDIA GPU. No GPU? use "onnxruntime" instead (CPU only)
+faster-whisper    # only needed for the whisper-* models

@@ -1,0 +1,12 @@
+# Dictate settings. Restart the app after editing.
+model = "parakeet-tdt-0.6b-v3"      # benchmark winner; see MODELS in engines.py
+device = "auto"                    # "auto" (GPU if an NVIDIA GPU is found, else CPU), "cuda" or "cpu"
+language = "auto"                  # "auto" (detects es/en/de), "es", "en" or "de"
+hotkey = "ctrl+cmd"                # cmd = Windows key. e.g. "ctrl+alt", "ctrl+shift"
+hotkey_mode = "toggle"             # "toggle" = press once to start, again to stop; "hold" = hold to talk
+auto_paste = true                  # paste the text where your cursor is when you stop (still copied to clipboard too)
+bubble_hide_after_s = 4
+silence_rms = 0.01                 # raise if background noise gets transcribed, lower if quiet speech is skipped
+preroll_s = 0.3                    # audio kept from just before you press the hotkey (so the first word isn't cut)
+# apps where paste is Ctrl+Shift+V instead of Ctrl+V (add yours if a terminal doesn't get the text)
+terminal_apps = ["WindowsTerminal.exe", "OpenConsole.exe", "conhost.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "wezterm-gui.exe", "alacritty.exe", "mintty.exe", "Hyper.exe", "Tabby.exe", "Warp.exe", "kitty.exe"]
