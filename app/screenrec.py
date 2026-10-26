@@ -85,3 +85,9 @@ class CameraBubble:
     def close(self):
         if self.on:
             self.toggle()
+
+    def resize(self, delta):
+        """Sends + or - to the camera window, which makes the circle bigger or smaller."""
+        if self.on:
+            self.proc.stdin.write("+\n" if delta > 0 else "-\n")
+            self.proc.stdin.flush()

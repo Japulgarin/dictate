@@ -151,6 +151,7 @@ class Bubble(QWidget):
     notes_clicked = Signal()
     record_clicked = Signal()
     camera_clicked = Signal()
+    cam_resize = Signal(int)     # −20 / +20: make the floating camera circle smaller / bigger
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -210,6 +211,20 @@ class Bubble(QWidget):
             self.size_btns.append(b)
             self.ctrl_btns.append(b)
             self.ctrl_bg[b] = "#374151"
+        # − / + for the floating camera circle: they show while the camera is on, right after the camera button.
+        self.cam_size_btns = []
+        for text, delta, tip in (("−", -20, "Smaller camera"), ("+", 20, "Bigger camera")):
+            b = QPushButton(text, self)
+            b.setToolTip(tip)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.hide()
+            b.clicked.connect(lambda _=False, d=delta: self.cam_resize.emit(d))
+            self.cam_size_btns.append(b)
+            self.ctrl_btns.append(b)
+            self.ctrl_bg[b] = "#0d9488"
+        for i, b in enumerate(self.cam_size_btns):
+            lay.insertWidget(lay.indexOf(self.cam_btn) + 1 + i, b)
         self._style_buttons()
         self.paused = False
         self.camera_on = False
@@ -252,10 +267,16 @@ class Bubble(QWidget):
         self.rec_btn.setIcon(glyph_icon("stop" if self.screen_on else "record"))
         self.rec_btn.setToolTip("Stop recording" if self.screen_on else "Record screen")
         for b in self.ctrl_btns:
-            b.setVisible(self.size_mode or b not in self.size_btns)
+            if b in self.size_btns:
+                b.setVisible(self.size_mode)
+            elif b in self.cam_size_btns:
+                b.setVisible(self.camera_on)
+            else:
+                b.show()
         self.adjustSize()
         self._reanchor()
-        self.hide_timer.start(5000)
+        if not self.camera_on:  # with the camera on, the buttons stay open so − / + are there
+            self.hide_timer.start(5000)
 
     def _reanchor(self):
         if not self._moved():
@@ -399,6 +420,7 @@ class App:
         self.bubble.record_clicked.connect(self.toggle_screen_recording)
         self.bubble.camera_clicked.connect(self.toggle_camera)
         self.camera = screenrec.CameraBubble()
+        self.bubble.cam_resize.connect(self.camera.resize)
         self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit)
         self.bridge.screen.connect(self.on_screen_line)
         self.bridge.toggle_screen.connect(self.toggle_screen_recording)

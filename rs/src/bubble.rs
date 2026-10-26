@@ -36,9 +36,12 @@ const CAMERA_TITLE: &str = "dictate-camera";
 /// camera off or quits.
 pub fn run_camera_only(cfg: Config) -> anyhow::Result<()> {
     let feed = CameraFeed::start(&cfg)?;
-    std::thread::spawn(|| {
+    // Lines from the Python bubble: "+" / "-" resize the circle. Closing stdin (EOF) stops the camera.
+    let (tx, commands) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
         let mut line = String::new();
         while std::io::stdin().read_line(&mut line).map(|n| n > 0).unwrap_or(false) {
+            let _ = tx.send(line.trim().to_string());
             line.clear();
         }
         std::process::exit(0);
@@ -66,6 +69,7 @@ pub fn run_camera_only(cfg: Config) -> anyhow::Result<()> {
                 side: camera::PREVIEW_SIDE,
                 clicks: Vec::new(),
                 resizing: false,
+                commands,
             }))
         }),
     )
@@ -86,6 +90,15 @@ struct CameraOnly {
     clicks: Vec<f64>,
     /// Set by a triple-click: the mouse wheel then changes the size, with a white ring around the circle.
     resizing: bool,
+    /// Commands from the Python bubble's − / + buttons.
+    commands: std::sync::mpsc::Receiver<String>,
+}
+
+impl CameraOnly {
+    fn resize(&mut self, ctx: &egui::Context, delta: f32) {
+        self.side = (self.side + delta).clamp(MIN_SIDE, MAX_SIDE);
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(self.side, self.side)));
+    }
 }
 
 impl eframe::App for CameraOnly {
@@ -98,6 +111,14 @@ impl eframe::App for CameraOnly {
             self.styled = true;
             #[cfg(windows)]
             win32::make_no_activate(CAMERA_TITLE);
+        }
+        let cmds: Vec<String> = self.commands.try_iter().collect();
+        for cmd in cmds {
+            match cmd.as_str() {
+                "+" => self.resize(ctx, 20.0),
+                "-" => self.resize(ctx, -20.0),
+                _ => {}
+            }
         }
         let now = ctx.input(|i| i.time);
         egui::CentralPanel::default()
