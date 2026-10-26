@@ -549,7 +549,6 @@ class App:
         self.region = order[(order.index(self.region) + 1) % len(order)]
         self.screen_rec.region = self.region
         self.bubble.set_region(self.region)
-        self.bubble.show_msg(f"Próxima grabación: {self.region}", "#4b5563", autohide=True)
 
     def toggle_screen_recording(self):
         """Red button: start or stop a screen recording. Stopping saves it and renders the studio version;
