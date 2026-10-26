@@ -22,6 +22,9 @@ pub struct Config {
     pub record_fps: u32,
     pub record_encoder: String,
     pub record_mic: bool,
+    /// Microphone name as ffmpeg lists it (dshow). When set, screen and mic are recorded by one ffmpeg
+    /// process, so both share one clock and stay in sync. Empty = the separate cpal capture.
+    pub mic_device: String,
     pub recordings_dir: String,
     /// Camera name as ffmpeg lists it; empty = first camera found.
     pub camera_device: String,
@@ -54,6 +57,7 @@ impl Default for Config {
             record_fps: 30,
             record_encoder: "libx264".into(),
             record_mic: true,
+            mic_device: String::new(),
             recordings_dir: "recordings".into(),
             camera_device: String::new(),
             record_cursor: true,

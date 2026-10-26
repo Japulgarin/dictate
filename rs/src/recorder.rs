@@ -32,6 +32,8 @@ pub struct Recorder {
     cursor: Option<CursorTrack>,
     out: PathBuf,
     ffmpeg: String,
+    /// One ffmpeg process wrote the final file (screen + mic), so there is nothing to mux.
+    single: bool,
 }
 
 impl Recorder {
@@ -44,7 +46,12 @@ impl Recorder {
         let video_tmp = out_dir.join(format!("{stamp}.video.mp4"));
         let audio_tmp = out_dir.join(format!("{stamp}.audio.raw"));
 
-        let video = spawn_video(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &video_tmp)?;
+        let single = cfg.record_mic && !cfg.mic_device.is_empty();
+        let (video, video_tmp) = if single {
+            (spawn_av(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.mic_device, &out)?, out.clone())
+        } else {
+            (spawn_video(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &video_tmp)?, video_tmp)
+        };
 
         let cursor = if cfg.record_cursor {
             match CursorTrack::start(&out_dir.join(format!("{stamp}.cursor.csv"))) {
@@ -58,7 +65,7 @@ impl Recorder {
             None
         };
 
-        let mic = if cfg.record_mic {
+        let mic = if cfg.record_mic && !single {
             match start_mic(&audio_tmp) {
                 Ok(m) => Some(m),
                 Err(e) => {
@@ -83,6 +90,7 @@ impl Recorder {
             cursor,
             out,
             ffmpeg: cfg.ffmpeg.clone(),
+            single,
         })
     }
 
@@ -103,6 +111,9 @@ impl Recorder {
             bail!("ffmpeg produced no video (check that gdigrab works)");
         }
 
+        if self.single {
+            return Ok(self.out.clone());
+        }
         mux(&self.ffmpeg, &self.video_tmp, audio.as_ref(), &self.out)?;
 
         let _ = fs::remove_file(&self.video_tmp);
@@ -150,6 +161,23 @@ pub fn quality_args(encoder: &str) -> &'static [&'static str] {
     } else {
         &["-preset", "p4", "-cq", "23"]
     }
+}
+
+/// Screen (gdigrab) and microphone (dshow) in one ffmpeg process, written straight to `out`.
+fn spawn_av(ffmpeg: &str, encoder: &str, fps: u32, mic: &str, out: &Path) -> Result<Child> {
+    let child = Command::new(ffmpeg)
+        .args(["-hide_banner", "-loglevel", "error", "-y"])
+        .args(["-f", "gdigrab", "-framerate", &fps.to_string(), "-i", "desktop"])
+        .args(["-f", "dshow", "-i", &format!("audio={mic}")])
+        .args(["-c:v", encoder, "-pix_fmt", "yuv420p"])
+        .args(quality_args(encoder))
+        .args(["-c:a", "aac", "-b:a", "160k"])
+        .arg(out)
+        .stdin(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .with_context(|| format!("can't start ffmpeg ({ffmpeg}) for screen + mic"))?;
+    Ok(child)
 }
 
 fn spawn_video(ffmpeg: &str, encoder: &str, fps: u32, out: &Path) -> Result<Child> {
