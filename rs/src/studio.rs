@@ -16,6 +16,8 @@ const RAMP_S: f64 = 0.45;
 const LEAD_S: f64 = 0.4;
 /// Stay zoomed this long after the last click of a group.
 const HOLD_S: f64 = 1.8;
+/// A zoom never lasts longer than this: after it the view zooms back out before the next one.
+const MAX_ZOOM_S: f64 = 6.0;
 /// The recording fills this share of the frame; the rest is background.
 const FRAME_SCALE: f64 = 0.88;
 const CORNER_RADIUS: u32 = 18;
@@ -82,16 +84,20 @@ pub fn zoom_segments(samples: &[Sample]) -> Vec<Segment> {
     let mut segs: Vec<(Segment, f64)> = Vec::new(); // segment + number of clicks in it
     for c in clicks {
         match segs.last_mut() {
-            Some((s, n)) if c.t - LEAD_S <= s.end => {
+            Some((s, n)) if c.t - LEAD_S <= s.end && c.t + HOLD_S - s.start <= MAX_ZOOM_S => {
                 s.x = (s.x * *n + c.x) / (*n + 1.0);
                 s.y = (s.y * *n + c.y) / (*n + 1.0);
                 s.end = c.t + HOLD_S;
                 *n += 1.0;
             }
-            _ => segs.push((
-                Segment { start: (c.t - LEAD_S).max(0.0), end: c.t + HOLD_S, x: c.x, y: c.y },
-                1.0,
-            )),
+            last => {
+                // A new zoom starts only once the previous one has zoomed back out.
+                let earliest = last.map_or(0.0, |(s, _)| s.end);
+                segs.push((
+                    Segment { start: (c.t - LEAD_S).max(earliest), end: c.t + HOLD_S, x: c.x, y: c.y },
+                    1.0,
+                ));
+            }
         }
     }
     segs.into_iter().map(|(s, _)| s).collect()
@@ -263,6 +269,22 @@ mod tests {
         assert!((segs[0].end - 3.3).abs() < 1e-9);
         assert_eq!((segs[0].x, segs[0].y), (980.0, 570.0));
         assert!((segs[1].start - 8.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn long_click_streaks_zoom_out_between_zooms() {
+        let mut csv = String::from("# screen 1920 1080
+t_ms,x,y,left
+");
+        for i in 0..20 {
+            csv += &format!("{},500,500,0
+{},500,500,1
+", i * 1000, i * 1000 + 500);
+        }
+        let segs = zoom_segments(&parse_track(&csv).samples);
+        assert!(segs.len() > 1);
+        assert!(segs.iter().all(|s| s.end - s.start <= MAX_ZOOM_S + 1e-9));
+        assert!(segs.windows(2).all(|w| w[1].start >= w[0].end));
     }
 
     #[test]
