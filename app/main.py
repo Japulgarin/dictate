@@ -263,11 +263,18 @@ class Bubble(QWidget):
             b.setIconSize(QSize(round(16 * self.scale), round(16 * self.scale)))
             b.setStyleSheet(btn_css(self.ctrl_bg[b], side // 2))
 
-    def show_msg(self, text, color, autohide=False):
-        for b in self.ctrl_btns:
-            b.hide()
+    def show_recording(self, text):
+        """Dark bubble with red text while a screen recording runs. The buttons stay open, so you can stop it."""
+        self.show_msg(text, "#111827", keep_controls=True)
+        self.label.setStyleSheet("color: #f87171; font-weight: bold;")
+
+    def show_msg(self, text, color, autohide=False, keep_controls=False):
+        if not keep_controls:
+            for b in self.ctrl_btns:
+                b.hide()
         self.close_btn.show()
         self.color = QColor(color)
+        self.label.setStyleSheet("color: white;")
         self.label.setText(text)
         self.label.setMaximumWidth(round(380 * self.scale))
         self.adjustSize()
@@ -453,7 +460,7 @@ class App:
     def _show_rec_status(self):
         """Red banner with the elapsed time; it stays up until the recording is saved."""
         secs = int(time.monotonic() - self.rec_started)
-        self.bubble.show_msg(f"● REC {secs // 60:02d}:{secs % 60:02d}", "#e11d48")
+        self.bubble.show_recording(f"● Grabando pantalla {secs // 60:02d}:{secs % 60:02d}")
 
     def _tick_rec(self):
         if self.screen_rec.on:
