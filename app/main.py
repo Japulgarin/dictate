@@ -311,10 +311,14 @@ class Bubble(QWidget):
             b.setStyleSheet(btn_css(self.ctrl_bg[b], side // 2))
 
     def show_recording(self, text):
-        """Dark bubble with red text while a screen recording runs. The buttons stay open, so you can stop it."""
-        self.show_msg(text, "#111827")  # hides the buttons: only the small red line stays
+        """While a screen recording runs: a big red timer and only the stop button."""
+        self.show_msg(text, "#111827")
         self.label.setStyleSheet("color: #f87171; font-weight: bold;")
-        self.label.setFont(QFont("Segoe UI", 9))
+        self.label.setFont(QFont("Segoe UI", max(12, round(14 * self.scale))))
+        self.close_btn.hide()
+        self.rec_btn.setIcon(glyph_icon("stop"))
+        self.rec_btn.setChecked(True)
+        self.rec_btn.show()
 
     def show_msg(self, text, color, autohide=False, keep_controls=False):
         if not keep_controls:
@@ -500,6 +504,8 @@ class App:
 
     def on_bubble_click(self):
         """Clicking the mic shows Pause/Resume + Notes next to it; clicking again folds them away."""
+        if self.screen_rec.on:  # while recording, only the stop button shows
+            return
         if self.bubble.controls_visible():
             self.bubble._fold()
         else:
@@ -534,7 +540,7 @@ class App:
     def _show_rec_status(self):
         """Red banner with the elapsed time; it stays up until the recording is saved."""
         secs = int(time.monotonic() - self.rec_started)
-        self.bubble.show_recording(f"Grabando {secs // 60:02d}:{secs % 60:02d}")
+        self.bubble.show_recording(f"{secs // 60:02d}:{secs % 60:02d}")
 
     def _tick_rec(self):
         if self.screen_rec.on:
@@ -669,7 +675,6 @@ class App:
             self.tray.setIcon(dot_icon("#3b82f6"))
             self.notes.status.setText(f"Model: {self.model_name}")
             self.tray.setToolTip(f"Dictate — {HOW.format(CFG.get('hotkey'))} ({self.model_name})")
-            self.bubble.show_msg(f"Ready — {HOW.format(CFG.get('hotkey'))}", "#2563eb", autohide=True)
         elif s == "paused":
             self.tray.setIcon(dot_icon("#6b7280"))
             self.tray.setToolTip("Dictate — paused (tray → uncheck Pause to resume)")
