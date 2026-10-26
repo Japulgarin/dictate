@@ -118,6 +118,11 @@ def glyph_icon(kind):
         p.drawEllipse(14, 14, 36, 36)
     elif kind == "stop":
         p.drawRoundedRect(16, 16, 32, 32, 5, 5)
+    elif kind == "minus":
+        p.drawRoundedRect(12, 28, 40, 8, 4, 4)
+    elif kind == "plus":
+        p.drawRoundedRect(12, 28, 40, 8, 4, 4)
+        p.drawRoundedRect(28, 12, 8, 40, 4, 4)
     elif kind == "camera":
         p.drawRoundedRect(4, 18, 40, 28, 6, 6)
         p.drawPolygon(QPolygon([QPoint(46, 27), QPoint(60, 18), QPoint(60, 46), QPoint(46, 37)]))
@@ -200,8 +205,9 @@ class Bubble(QWidget):
             lay.addWidget(b)
         # − / + only show in size mode (double-click the bubble) so you can resize it live.
         self.size_btns = []
-        for text, delta, tip in (("−", -0.1, "Smaller bubble"), ("+", 0.1, "Bigger bubble")):
-            b = QPushButton(text, self)
+        for icon, delta, tip in (("minus", -0.1, "Smaller bubble"), ("plus", 0.1, "Bigger bubble")):
+            b = QPushButton(self)
+            b.setIcon(glyph_icon(icon))
             b.setToolTip(tip)
             b.setCursor(Qt.PointingHandCursor)
             b.setFocusPolicy(Qt.NoFocus)
@@ -213,8 +219,9 @@ class Bubble(QWidget):
             self.ctrl_bg[b] = "#374151"
         # − / + for the floating camera circle: they show while the camera is on, right after the camera button.
         self.cam_size_btns = []
-        for text, delta, tip in (("−", -20, "Smaller camera"), ("+", 20, "Bigger camera")):
-            b = QPushButton(text, self)
+        for icon, delta, tip in (("minus", -20, "Smaller camera"), ("plus", 20, "Bigger camera")):
+            b = QPushButton(self)
+            b.setIcon(glyph_icon(icon))
             b.setToolTip(tip)
             b.setCursor(Qt.PointingHandCursor)
             b.setFocusPolicy(Qt.NoFocus)
@@ -305,8 +312,9 @@ class Bubble(QWidget):
 
     def show_recording(self, text):
         """Dark bubble with red text while a screen recording runs. The buttons stay open, so you can stop it."""
-        self.show_msg(text, "#111827", keep_controls=True)
+        self.show_msg(text, "#111827")  # hides the buttons: only the small red line stays
         self.label.setStyleSheet("color: #f87171; font-weight: bold;")
+        self.label.setFont(QFont("Segoe UI", 9))
 
     def show_msg(self, text, color, autohide=False, keep_controls=False):
         if not keep_controls:
@@ -315,6 +323,7 @@ class Bubble(QWidget):
         self.close_btn.show()
         self.color = QColor(color)
         self.label.setStyleSheet("color: white;")
+        self.label.setFont(QFont("Segoe UI", max(7, round(10 * self.scale))))
         self.label.setText(text)
         self.label.setMaximumWidth(round(380 * self.scale))
         self.adjustSize()
@@ -525,7 +534,7 @@ class App:
     def _show_rec_status(self):
         """Red banner with the elapsed time; it stays up until the recording is saved."""
         secs = int(time.monotonic() - self.rec_started)
-        self.bubble.show_recording(f"● Grabando pantalla {secs // 60:02d}:{secs % 60:02d}")
+        self.bubble.show_recording(f"Grabando {secs // 60:02d}:{secs % 60:02d}")
 
     def _tick_rec(self):
         if self.screen_rec.on:
