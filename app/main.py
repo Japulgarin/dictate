@@ -131,7 +131,7 @@ def glyph_icon(kind):
 
 
 def btn_css(bg, radius):
-    return (f"QPushButton{{background:{bg};border:2px solid rgba(255,255,255,70);border-radius:{radius}px;}}"
+    return (f"QPushButton{{background:{bg};color:white;border:2px solid rgba(255,255,255,70);border-radius:{radius}px;}}"
             "QPushButton:hover{border-color:white;}"
             "QPushButton:checked{background:#22c55e;border-color:white;}")
 
@@ -195,13 +195,28 @@ class Bubble(QWidget):
             b.hide()
             b.clicked.connect(signal)
             lay.addWidget(b)
+        # − / + only show in size mode (double-click the bubble) so you can resize it live.
+        self.size_btns = []
+        for text, delta, tip in (("−", -0.2, "Smaller bubble"), ("+", 0.2, "Bigger bubble")):
+            b = QPushButton(text, self)
+            b.setToolTip(tip)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.hide()
+            b.clicked.connect(lambda _=False, d=delta: self.set_scale(round(min(2.0, max(0.5, self.scale + d)), 2)))
+            lay.addWidget(b)
+            self.size_btns.append(b)
+            self.ctrl_btns.append(b)
+            self.ctrl_bg[b] = "#374151"
         self._style_buttons()
         self.paused = False
         self.camera_on = False
         self.screen_on = False
+        self.size_mode = False
+        self._skip_click = False  # set by a double-click so its two releases don't toggle the buttons
         self.color = QColor("#222")
         self._drag = None
-        self.hide_timer = QTimer(self, singleShot=True, timeout=self.show_idle)
+        self.hide_timer = QTimer(self, singleShot=True, timeout=self._fold)
         # keep the bubble alive and on top even after the taskbar / Start menu covers it
         self.keepalive = QTimer(self, interval=2000, timeout=self._keep_on_top)
         self.keepalive.start()
@@ -235,7 +250,7 @@ class Bubble(QWidget):
         self.rec_btn.setIcon(glyph_icon("stop" if self.screen_on else "record"))
         self.rec_btn.setToolTip("Stop recording" if self.screen_on else "Record screen")
         for b in self.ctrl_btns:
-            b.show()
+            b.setVisible(self.size_mode or b not in self.size_btns)
         self.adjustSize()
         self._reanchor()
         self.hide_timer.start(5000)
@@ -307,9 +322,23 @@ class Bubble(QWidget):
             self._user_pos = True
 
     def mouseReleaseEvent(self, e):
-        if (e.globalPosition().toPoint() - self._press_at).manhattanLength() < 5:
+        if self._skip_click:
+            self._skip_click = False
+        elif (e.globalPosition().toPoint() - self._press_at).manhattanLength() < 5:
             self.clicked.emit()
         self._drag = None
+
+    def mouseDoubleClickEvent(self, e):
+        """Double-click: open the buttons with − / + to resize the bubble."""
+        self._skip_click = True
+        self.size_mode = True
+        self.show_controls()
+        self.hide_timer.stop()  # size mode stays open until you click the dot again
+
+    def _fold(self):
+        """Hide the buttons and leave size mode; used by the timer and by clicking the dot again."""
+        self.size_mode = False
+        self.show_idle()
 
 
 class NotesWindow(QWidget):
@@ -427,7 +456,7 @@ class App:
     def on_bubble_click(self):
         """Clicking the mic shows Pause/Resume + Notes next to it; clicking again folds them away."""
         if self.bubble.controls_visible():
-            self.bubble.show_idle()
+            self.bubble._fold()
         else:
             self.bubble.show_controls()
 
