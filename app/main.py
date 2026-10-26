@@ -143,10 +143,11 @@ def glyph_icon(kind):
     return QIcon(pm)
 
 
-def btn_css(bg, radius):
-    return (f"QPushButton{{background:{bg};color:white;border:2px solid rgba(255,255,255,70);border-radius:{radius}px;}}"
-            "QPushButton:hover{border-color:white;}"
-            "QPushButton:checked{background:#22c55e;border-color:white;}")
+def btn_css(radius):
+    """Same look as the Joint Listen pill: dark round buttons with a thin border and white line icons."""
+    return (f"QPushButton{{background:#1b1b20;border:1px solid #3a3a42;border-radius:{radius}px;}}"
+            "QPushButton:hover{border-color:#ee7a12;}"
+            "QPushButton:checked{background:#3a1a1c;border-color:#e5484d;}")
 
 
 class Bridge(QObject):
@@ -266,7 +267,7 @@ class Bubble(QWidget):
         if self.paused:
             self.show_msg("❚❚", "#4b5563")
         else:
-            self.show_msg("🎙", "#2563eb")
+            self.show_msg("🎙", "#1b1b20")
         self.close_btn.hide()
         self.adjustSize()
 
@@ -319,7 +320,7 @@ class Bubble(QWidget):
         for b in self.ctrl_btns:
             b.setFixedSize(side, side)
             b.setIconSize(QSize(icon, icon))
-            b.setStyleSheet(btn_css(self.ctrl_bg[b], side // 2))
+            b.setStyleSheet(btn_css(side // 2))
 
     def set_region(self, region):
         """Icon and tooltip of the screen-part button: a box for full, an arrow for left / right."""
