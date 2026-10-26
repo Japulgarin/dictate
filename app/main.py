@@ -199,13 +199,13 @@ class Bubble(QWidget):
             lay.addWidget(b)
         # − / + only show in size mode (double-click the bubble) so you can resize it live.
         self.size_btns = []
-        for text, delta, tip in (("−", -0.2, "Smaller bubble"), ("+", 0.2, "Bigger bubble")):
+        for text, delta, tip in (("−", -0.1, "Smaller bubble"), ("+", 0.1, "Bigger bubble")):
             b = QPushButton(text, self)
             b.setToolTip(tip)
             b.setCursor(Qt.PointingHandCursor)
             b.setFocusPolicy(Qt.NoFocus)
             b.hide()
-            b.clicked.connect(lambda _=False, d=delta: self.set_scale(round(min(2.0, max(0.5, self.scale + d)), 2)))
+            b.clicked.connect(lambda _=False, d=delta: self.set_scale(round(min(2.0, max(0.3, self.scale + d)), 2)))
             lay.addWidget(b)
             self.size_btns.append(b)
             self.ctrl_btns.append(b)
