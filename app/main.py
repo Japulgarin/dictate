@@ -713,6 +713,7 @@ class App:
             self.tray.setIcon(dot_icon("#3b82f6"))
             self.notes.status.setText(f"Model: {self.model_name}")
             self.tray.setToolTip(f"Dictate — {HOW.format(CFG.get('hotkey'))} ({self.model_name})")
+            self.bubble.show_idle()  # replaces "Loading model…" with the dot
         elif s == "paused":
             self.tray.setIcon(dot_icon("#6b7280"))
             self.tray.setToolTip("Dictate — paused (tray → uncheck Pause to resume)")
