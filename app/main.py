@@ -141,6 +141,8 @@ class Bridge(QObject):
     state = Signal(str)          # "listening" | "transcribing" | "idle" | "loading" | "error:<msg>"
     result = Signal(str, float)  # text, seconds taken
     screen = Signal(str)         # lines printed by the screen recorder: "recording", "saved <mp4>", ...
+    toggle_screen = Signal()     # screen-recording hotkey (Shift+Win+Alt by default)
+    restart_app = Signal()       # restart hotkey (Win+Alt+Z by default)
 
 
 class Bubble(QWidget):
@@ -397,6 +399,16 @@ class App:
         self.camera = screenrec.CameraBubble()
         self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit)
         self.bridge.screen.connect(self.on_screen_line)
+        self.bridge.toggle_screen.connect(self.toggle_screen_recording)
+        self.bridge.restart_app.connect(self.restart)
+        # Extra global hotkeys: start/stop a screen recording, and restart the app.
+        self.screen_hotkey = HoldHotkey(CFG.get("screen_hotkey", "shift+cmd+alt"),
+                                        self.bridge.toggle_screen.emit, None, toggle=True)
+        self.restart_hotkey = HoldHotkey(CFG.get("restart_hotkey", "cmd+alt+z"),
+                                         self.bridge.restart_app.emit, None, toggle=True)
+        self.screen_hotkey.start()
+        self.restart_hotkey.start()
+        self.exit_code = 0  # 1 on restart: the watchdog (run.pyw) starts the app again
         self.rec_timer = QTimer(interval=1000, timeout=self._tick_rec)
         self.rec_started = 0.0
         self.recorder = Recorder(CFG.get("preroll_s", 0.3))
@@ -651,13 +663,26 @@ class App:
     def quit(self):
         logging.info("quit from tray menu")
         self.hotkey.stop()
+        self.screen_hotkey.stop()
+        self.restart_hotkey.stop()
         self.recorder.close()
         self.camera.close()
         self.screen_rec.close()
         self.tray.hide()
         self.bubble.keepalive.stop()
         self.bubble.hide()
-        self.qt.quit()
+        self.qt.exit(self.exit_code)
+
+    def restart(self):
+        """Win+Alt+Z: quit with code 1, and the watchdog starts Dictate again. Not while recording,
+        so the video still gets saved."""
+        if self.screen_rec.on:
+            self._show_rec_status()
+            self.bubble.show_msg("Para la grabación antes de reiniciar", "#7f1d1d", autohide=True)
+            return
+        logging.info("restart: hotkey")
+        self.exit_code = 1
+        self.quit()
 
     def run(self):
         return self.qt.exec()
