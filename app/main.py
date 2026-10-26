@@ -116,6 +116,8 @@ def glyph_icon(kind):
         p.drawPolygon(QPolygon([QPoint(20, 10), QPoint(54, 32), QPoint(20, 54)]))
     elif kind == "record":
         p.drawEllipse(14, 14, 36, 36)
+    elif kind == "stop":
+        p.drawRoundedRect(16, 16, 32, 32, 5, 5)
     elif kind == "camera":
         p.drawRoundedRect(4, 18, 40, 28, 6, 6)
         p.drawPolygon(QPolygon([QPoint(46, 27), QPoint(60, 18), QPoint(60, 46), QPoint(46, 37)]))
@@ -228,6 +230,7 @@ class Bubble(QWidget):
         self.cam_btn.setChecked(self.camera_on)
         self.cam_btn.setToolTip("Hide camera" if self.camera_on else "Show camera")
         self.rec_btn.setChecked(self.screen_on)
+        self.rec_btn.setIcon(glyph_icon("stop" if self.screen_on else "record"))
         self.rec_btn.setToolTip("Stop recording" if self.screen_on else "Record screen")
         for b in self.ctrl_btns:
             b.show()
@@ -337,6 +340,8 @@ class App:
         self.camera = screenrec.CameraBubble()
         self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit)
         self.bridge.screen.connect(self.on_screen_line)
+        self.rec_timer = QTimer(interval=1000, timeout=self._tick_rec)
+        self.rec_started = 0.0
         self.recorder = Recorder(CFG.get("preroll_s", 0.3))
         self.engine = None
         self.model_name = CFG.get("model", "whisper-large-v3-turbo")
@@ -409,13 +414,28 @@ class App:
             return
         self.screen_rec.toggle()
         self.bubble.screen_on = self.screen_rec.on
-        self.bubble.show_controls()
+        if self.screen_rec.on:
+            self.rec_started = time.monotonic()
+            self.rec_timer.start(1000)
+            self._show_rec_status()
+        else:
+            self.rec_timer.stop()
+            self.bubble.show_msg("● Guardando video…", "#4b5563")
+
+    def _show_rec_status(self):
+        """Red banner with the elapsed time; it stays up until the recording is saved."""
+        secs = int(time.monotonic() - self.rec_started)
+        self.bubble.show_msg(f"● REC {secs // 60:02d}:{secs % 60:02d}", "#e11d48")
+
+    def _tick_rec(self):
+        if self.screen_rec.on:
+            self._show_rec_status()
 
     def on_screen_line(self, line):
         kind, _, arg = line.partition(" ")
         logging.info("screen: %s", line)
         if kind == "recording":
-            self.bubble.show_controls()
+            self._show_rec_status()
         elif kind == "saved":
             self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
         elif kind == "studio":
