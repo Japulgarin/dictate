@@ -265,8 +265,9 @@ class Bubble(QWidget):
     def set_scale(self, s):
         """Bigger or smaller bubble (tray → Bubble size, or bubble_scale in config.toml)."""
         self.scale = s
-        self.label.setFont(QFont("Segoe UI", round(10 * s)))
-        self.close_btn.setFixedSize(round(20 * s), round(20 * s))
+        self.label.setFont(QFont("Segoe UI", max(7, round(10 * s))))
+        self.label.setMinimumSize(20, 20)  # the dot stays big enough to click at small sizes
+        self.close_btn.setFixedSize(max(16, round(20 * s)), max(16, round(20 * s)))
         pad = round(10 * s)
         self.layout().setContentsMargins(round(16 * s), pad, round(16 * s), pad)
         self._style_buttons()
@@ -274,10 +275,11 @@ class Bubble(QWidget):
         self._reanchor()
 
     def _style_buttons(self):
-        side = round(28 * self.scale)
+        side = max(24, round(28 * self.scale))  # floor so the buttons can always be clicked
+        icon = max(12, round(16 * self.scale))
         for b in self.ctrl_btns:
             b.setFixedSize(side, side)
-            b.setIconSize(QSize(round(16 * self.scale), round(16 * self.scale)))
+            b.setIconSize(QSize(icon, icon))
             b.setStyleSheet(btn_css(self.ctrl_bg[b], side // 2))
 
     def show_recording(self, text):
