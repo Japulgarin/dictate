@@ -604,13 +604,10 @@ class App:
             self.rec_started = time.monotonic()
             self.rec_timer.start(1000)
             self._show_rec_status()
-        elif kind == "saved":
-            if CFG.get("record_studio", True):
-                self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
-            else:  # no studio render: the plain recording is the final video
-                self._recording_ready(arg)
-        elif kind == "studio":
+        elif kind == "saved":  # the plain video is ready now; the studio render follows in the background
             self._recording_ready(arg)
+        elif kind == "studio":
+            self._copy_to_studio(arg)
         elif kind == "vertical":
             self._copy_to_studio(arg)
             self.bubble.show_msg(f"Versión Instagram lista: {os.path.basename(arg)}", "#2563eb", autohide=True)

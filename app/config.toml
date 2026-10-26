@@ -17,4 +17,4 @@ recordings_dir = "C:/Users/inven/Videos/Dictate"  # local folder on this compute
 mic_device = "Microphone Array (Realtek(R) Audio)"  # ffmpeg dshow name: screen + mic recorded in one process (in sync)
 audio_delay_s = 0.26  # measured: the mic starts 0.26 s after the first screen frame; raise it if the voice comes before the picture, lower if after
 copy_to_dir = "C:/Users/inven/OneDrive/Escritorio/Jobs_germany/content/recordings"  # finished recordings are also copied here (AI Studio editor)
-record_studio = false  # true = also render a .studio.mp4 (click zoom, rounded frame, gradient); false = only the plain recording
+record_studio = true  # also render a .studio.mp4 (click zoom, rounded frame, gradient) after the plain recording; both go to AI Studio
