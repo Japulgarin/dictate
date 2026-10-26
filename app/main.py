@@ -573,6 +573,12 @@ class App:
         if self.screen_rec.on:
             self._show_rec_status()
 
+    def _copy_to_studio(self, *paths):
+        """Also puts the files in the AI Studio recordings folder (copy_to_dir), so its editor sees them."""
+        dest = CFG.get("copy_to_dir", "")
+        if dest:
+            threading.Thread(target=screenrec.copy_files, args=(paths, dest), daemon=True).start()
+
     def _make_vertical(self, src):
         dst = screenrec.make_vertical(src)
         if dst:
@@ -588,6 +594,8 @@ class App:
         elif kind == "saved":
             self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
         elif kind == "studio":
+            base = arg[:-len(".studio.mp4")]
+            self._copy_to_studio(base + ".mp4", arg, base + ".cursor.csv")
             os.startfile(arg)  # the rendered video plays right away
             threading.Thread(target=self._make_vertical, args=(arg,), daemon=True).start()
             # Recordly waits minimized in the background.
@@ -597,6 +605,7 @@ class App:
             else:
                 self.bubble.show_msg("Recordly not built (see app/screenrec.py)", "#7f1d1d", autohide=True)
         elif kind == "vertical":
+            self._copy_to_studio(arg)
             self.bubble.show_msg(f"Versión Instagram lista: {os.path.basename(arg)}", "#2563eb", autohide=True)
         elif kind == "error":
             self.bubble.show_msg(f"Error grabando: {arg}", "#7f1d1d", autohide=True)

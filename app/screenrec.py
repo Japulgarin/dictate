@@ -3,6 +3,7 @@ helper (rs/target/release/dictate.exe)."""
 import os
 import subprocess
 import logging
+import shutil
 import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -97,6 +98,17 @@ class CameraBubble:
         if self.on:
             self.proc.stdin.write("+\n" if delta > 0 else "-\n")
             self.proc.stdin.flush()
+
+
+def copy_files(paths, dest):
+    """Copies finished recordings into another folder (the AI Studio editor's recordings folder)."""
+    try:
+        os.makedirs(dest, exist_ok=True)
+        for p in paths:
+            if os.path.exists(p):
+                shutil.copy2(p, dest)
+    except OSError as e:
+        logging.error("copy to %s failed: %s", dest, e)
 
 
 def make_vertical(src):
