@@ -530,9 +530,8 @@ class App:
         self.screen_rec.toggle()
         self.bubble.screen_on = self.screen_rec.on
         if self.screen_rec.on:
-            self.rec_started = time.monotonic()
-            self.rec_timer.start(1000)
-            self._show_rec_status()
+            self.bubble.show_msg("Iniciando…", "#111827")  # the timer starts when the capture really starts
+
         else:
             self.rec_timer.stop()
             self.bubble.show_msg("● Guardando video…", "#4b5563")
@@ -549,7 +548,9 @@ class App:
     def on_screen_line(self, line):
         kind, _, arg = line.partition(" ")
         logging.info("screen: %s", line)
-        if kind == "recording":
+        if kind == "recording":  # capture has started now: count from here
+            self.rec_started = time.monotonic()
+            self.rec_timer.start(1000)
             self._show_rec_status()
         elif kind == "saved":
             self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
