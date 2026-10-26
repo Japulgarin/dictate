@@ -59,14 +59,33 @@ pub fn run_camera_only(cfg: Config) -> anyhow::Result<()> {
     eframe::run_native(
         "Dictate camera",
         eframe::NativeOptions { viewport, ..Default::default() },
-        Box::new(move |_cc| Ok(Box::new(CameraOnly { feed, styled: false }))),
+        Box::new(move |_cc| {
+            Ok(Box::new(CameraOnly {
+                feed,
+                styled: false,
+                side: camera::PREVIEW_SIDE,
+                clicks: Vec::new(),
+                resizing: false,
+            }))
+        }),
     )
     .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
+/// Three clicks this close together (seconds) count as a triple-click.
+const TRIPLE_CLICK_WINDOW: f64 = 1.5;
+const MIN_SIDE: f32 = 120.0;
+const MAX_SIDE: f32 = 480.0;
+
 struct CameraOnly {
     feed: CameraFeed,
     styled: bool,
+    /// Current size of the circle in points; the window follows it.
+    side: f32,
+    /// Times of recent clicks, for spotting a triple-click.
+    clicks: Vec<f64>,
+    /// Set by a triple-click: the mouse wheel then changes the size, with a white ring around the circle.
+    resizing: bool,
 }
 
 impl eframe::App for CameraOnly {
@@ -80,18 +99,41 @@ impl eframe::App for CameraOnly {
             #[cfg(windows)]
             win32::make_no_activate(CAMERA_TITLE);
         }
+        let now = ctx.input(|i| i.time);
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
                 let (rect, response) =
-                    ui.allocate_exact_size(egui::Vec2::splat(camera::PREVIEW_SIDE), egui::Sense::drag());
+                    ui.allocate_exact_size(egui::Vec2::splat(self.side), egui::Sense::click_and_drag());
                 if response.drag_started() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
                 if response.hovered() {
                     ctx.set_cursor_icon(egui::CursorIcon::Grab);
                 }
+                if response.clicked() {
+                    self.clicks.retain(|t| now - t < TRIPLE_CLICK_WINDOW);
+                    self.clicks.push(now);
+                    if self.clicks.len() >= 3 {
+                        self.clicks.clear();
+                        self.resizing = !self.resizing;
+                    }
+                }
+                if self.resizing {
+                    let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+                    if scroll != 0.0 {
+                        self.side = (self.side + scroll * 0.5).clamp(MIN_SIDE, MAX_SIDE);
+                        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(self.side, self.side)));
+                    }
+                }
                 camera::paint_preview(ui, &self.feed.shared(), rect);
+                if self.resizing {
+                    ui.painter().circle_stroke(
+                        rect.center(),
+                        rect.width() / 2.0 - 2.0,
+                        egui::Stroke::new(3.0, egui::Color32::WHITE),
+                    );
+                }
             });
     }
 }
