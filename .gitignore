@@ -6,3 +6,6 @@ notes/
 bench/data/
 bench/*.log
 brag-output/
+rs/target/
+recordings/
+recorder.log

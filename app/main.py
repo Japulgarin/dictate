@@ -15,10 +15,12 @@ logging.basicConfig(filename=os.path.join(ROOT, "dictate.log"), level=logging.IN
                     format="%(asctime)s %(levelname)s %(message)s")
 
 import engines  # noqa: E402
+import screenrec  # noqa: E402
 from hotkey import HoldHotkey, _really_down  # noqa: E402
 from pynput.keyboard import Controller as KeyController, Key  # noqa: E402
-from PySide6.QtCore import QObject, QPoint, Qt, QTimer, Signal  # noqa: E402
-from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QIcon, QPainter, QPixmap  # noqa: E402
+from PySide6.QtCore import QObject, QPoint, QSize, Qt, QTimer, Signal  # noqa: E402
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont, QIcon, QPainter, QPen, QPixmap,  # noqa: E402
+                           QPolygon)
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMenu, QPlainTextEdit,  # noqa: E402
                                QPushButton, QScrollArea, QSystemTrayIcon, QVBoxLayout, QWidget)
 from recorder import SR, Recorder  # noqa: E402
@@ -92,14 +94,53 @@ def dot_icon(color):
     return QIcon(pm)
 
 
+def glyph_icon(kind):
+    """White drawn icon for the bubble buttons (emoji such as ⏸ ⏺ show up as blue boxes on Windows)."""
+    pm = QPixmap(64, 64)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    white = QColor("white")
+    p.setBrush(white)
+    p.setPen(Qt.NoPen)
+    if kind == "mic":
+        p.drawRoundedRect(24, 6, 16, 32, 8, 8)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(white, 5, Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(14, 14, 36, 34, 180 * 16, 180 * 16)  # cradle under the capsule
+        p.drawLine(32, 48, 32, 58)
+    elif kind == "pause":
+        p.drawRoundedRect(16, 12, 11, 40, 4, 4)
+        p.drawRoundedRect(37, 12, 11, 40, 4, 4)
+    elif kind == "play":
+        p.drawPolygon(QPolygon([QPoint(20, 10), QPoint(54, 32), QPoint(20, 54)]))
+    elif kind == "record":
+        p.drawEllipse(14, 14, 36, 36)
+    elif kind == "camera":
+        p.drawRoundedRect(4, 18, 40, 28, 6, 6)
+        p.drawPolygon(QPolygon([QPoint(46, 27), QPoint(60, 18), QPoint(60, 46), QPoint(46, 37)]))
+    elif kind == "notes":
+        p.drawRoundedRect(14, 6, 36, 52, 5, 5)
+        p.setPen(QPen(QColor("#7c3aed"), 4, Qt.SolidLine, Qt.RoundCap))
+        for y in (20, 31, 42):
+            p.drawLine(22, y, 42, y)
+    p.end()
+    return QIcon(pm)
+
+
 class Bridge(QObject):
     """Thread-safe signals from the hotkey/worker threads into the Qt main thread."""
     state = Signal(str)          # "listening" | "transcribing" | "idle" | "loading" | "error:<msg>"
     result = Signal(str, float)  # text, seconds taken
+    screen = Signal(str)         # lines printed by the screen recorder: "recording", "saved <mp4>", ...
 
 
 class Bubble(QWidget):
     clicked = Signal()
+    pause_clicked = Signal()
+    notes_clicked = Signal()
+    record_clicked = Signal()
+    camera_clicked = Signal()
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -123,6 +164,37 @@ class Bubble(QWidget):
                                      "QPushButton:hover{background:#dc2626;}")
         self.close_btn.clicked.connect(self.show_idle)  # only dismisses the message; quit is in the tray menu
         lay.addWidget(self.close_btn, 0, Qt.AlignTop)
+        # Controls that pop up next to the dot when you click it: small round buttons with drawn icons,
+        # one colour each, in the order camera, record screen, notes, pause.
+        def btn_css(bg):
+            return (f"QPushButton{{background:{bg};border:2px solid rgba(255,255,255,70);border-radius:14px;}}"
+                    "QPushButton:hover{border-color:white;}"
+                    "QPushButton:checked{background:#22c55e;border-color:white;}")
+        self.cam_btn = QPushButton(self)
+        self.rec_btn = QPushButton(self)
+        self.notes_btn = QPushButton(self)
+        self.pause_btn = QPushButton(self)
+        self.cam_btn.setCheckable(True)  # green while the camera is on
+        self.rec_btn.setCheckable(True)  # green while a screen recording is running
+        spec = [(self.cam_btn, "#0d9488", "camera", "Show camera", self.camera_clicked),
+                (self.rec_btn, "#e11d48", "record", "Record screen", self.record_clicked),
+                (self.notes_btn, "#7c3aed", "notes", "Notes", self.notes_clicked),
+                (self.pause_btn, "#d97706", "pause", "Pause (free GPU)", self.pause_clicked)]
+        self.ctrl_btns = [b for b, *_ in spec]
+        for b, bg, icon, tip, signal in spec:
+            b.setFixedSize(28, 28)
+            b.setIcon(glyph_icon(icon))
+            b.setIconSize(QSize(16, 16))
+            b.setToolTip(tip)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.setStyleSheet(btn_css(bg))
+            b.hide()
+            b.clicked.connect(signal)
+            lay.addWidget(b)
+        self.paused = False
+        self.camera_on = False
+        self.screen_on = False
         self.color = QColor("#222")
         self._drag = None
         self.hide_timer = QTimer(self, singleShot=True, timeout=self.show_idle)
@@ -136,20 +208,47 @@ class Bubble(QWidget):
         self.raise_()
 
     def show_idle(self):
-        """Small always-visible dot so you know the app is running. Click it to open your notes."""
-        self.show_msg("🎙", "#2563eb")
+        """Small always-visible dot so you know the app is running. Click it for pause / notes buttons."""
+        if self.paused:
+            self.show_msg("❚❚", "#4b5563")
+        else:
+            self.show_msg("🎙", "#2563eb")
         self.close_btn.hide()
         self.adjustSize()
 
+    def controls_visible(self):
+        return self.pause_btn.isVisible()
+
+    def show_controls(self):
+        """Mic plus Dictate, Pause/Resume, Camera, Record screen and Notes buttons; folds back to the
+        plain dot after a few seconds."""
+        self.show_idle()
+        self.pause_btn.setIcon(glyph_icon("play" if self.paused else "pause"))
+        self.pause_btn.setToolTip("Resume" if self.paused else "Pause (free GPU)")
+        self.cam_btn.setChecked(self.camera_on)
+        self.cam_btn.setToolTip("Hide camera" if self.camera_on else "Show camera")
+        self.rec_btn.setChecked(self.screen_on)
+        self.rec_btn.setToolTip("Stop recording" if self.screen_on else "Record screen")
+        for b in self.ctrl_btns:
+            b.show()
+        self.adjustSize()
+        self._reanchor()
+        self.hide_timer.start(5000)
+
+    def _reanchor(self):
+        if not self._moved():
+            scr = QApplication.primaryScreen().availableGeometry()
+            self.move(scr.right() - self.width() - 24, scr.bottom() - self.height() - 24)
+
     def show_msg(self, text, color, autohide=False):
+        for b in self.ctrl_btns:
+            b.hide()
         self.close_btn.show()
         self.color = QColor(color)
         self.label.setText(text)
         self.label.setMaximumWidth(380)
         self.adjustSize()
-        if not self._moved():
-            scr = QApplication.primaryScreen().availableGeometry()
-            self.move(scr.right() - self.width() - 24, scr.bottom() - self.height() - 24)
+        self._reanchor()
         self.show()
         self.raise_()
         self.update()
@@ -230,13 +329,21 @@ class App:
         self.bridge.result.connect(self.on_result)
         self.bubble = Bubble()
         self.notes = NotesWindow()
-        self.bubble.clicked.connect(self.show_notes)
+        self.bubble.clicked.connect(self.on_bubble_click)
+        self.bubble.pause_clicked.connect(lambda: self.pause_action.setChecked(not self.paused))
+        self.bubble.notes_clicked.connect(self.show_notes)
+        self.bubble.record_clicked.connect(self.toggle_screen_recording)
+        self.bubble.camera_clicked.connect(self.toggle_camera)
+        self.camera = screenrec.CameraBubble()
+        self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit)
+        self.bridge.screen.connect(self.on_screen_line)
         self.recorder = Recorder(CFG.get("preroll_s", 0.3))
         self.engine = None
         self.model_name = CFG.get("model", "whisper-large-v3-turbo")
         self.language = CFG.get("language", "auto")
         self.auto_paste = CFG.get("auto_paste", True)
         self.busy = threading.Lock()
+        self.paused = False
         self._build_tray()
         self.recording = False
         if TOGGLE:
@@ -268,16 +375,67 @@ class App:
         paste.toggled.connect(lambda on: setattr(self, "auto_paste", on))
         menu.addAction(paste)
         menu.addSeparator()
+        self.pause_action = QAction("Pause (free GPU)", menu, checkable=True)
+        self.pause_action.toggled.connect(self.set_paused)
+        menu.addAction(self.pause_action)
         menu.addAction("Quit", self.quit)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(lambda r: r == QSystemTrayIcon.Trigger and self.show_notes())
         self.tray.show()
         self.menu = menu
 
+    def on_bubble_click(self):
+        """Clicking the mic shows Pause/Resume + Notes next to it; clicking again folds them away."""
+        if self.bubble.controls_visible():
+            self.bubble.show_idle()
+        else:
+            self.bubble.show_controls()
+
     def show_notes(self):
         self.notes.show()
         self.notes.raise_()
         self.notes.activateWindow()
+
+    def _recorder_missing(self):
+        if screenrec.available():
+            return False
+        self.bubble.show_msg("Recorder not built: cd rs && cargo build --release", "#7f1d1d", autohide=True)
+        return True
+
+    def toggle_screen_recording(self):
+        """Red button: start or stop a screen recording. Stopping saves it and renders the studio version;
+        then Recordly opens with the video so you can look at it."""
+        if self._recorder_missing():
+            return
+        self.screen_rec.toggle()
+        self.bubble.screen_on = self.screen_rec.on
+        self.bubble.show_controls()
+
+    def on_screen_line(self, line):
+        kind, _, arg = line.partition(" ")
+        logging.info("screen: %s", line)
+        if kind == "recording":
+            self.bubble.show_controls()
+        elif kind == "saved":
+            self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
+        elif kind == "studio":
+            self.bubble.show_msg("Video listo: abriendo Recordly", "#2563eb", autohide=True)
+            try:
+                os.startfile(arg)  # plays the studio version right away
+            except OSError as e:
+                logging.warning("can't open %s: %s", arg, e)
+            if not screenrec.open_recordly():
+                self.bubble.show_msg("Recordly not built (see app/screenrec.py)", "#7f1d1d", autohide=True)
+        elif kind == "error":
+            self.bubble.show_msg(f"Error grabando: {arg}", "#7f1d1d", autohide=True)
+
+    def toggle_camera(self):
+        """📷 in the bubble: show or hide the round webcam preview (it gets recorded with the screen)."""
+        if self._recorder_missing():
+            return
+        self.camera.toggle()
+        self.bubble.camera_on = self.camera.on
+        self.bubble.show_controls()
 
     def load_model(self, name):
         def work():
@@ -296,6 +454,28 @@ class App:
                     self.bridge.state.emit(f"error:Could not load {name}: {e}")
         threading.Thread(target=work, daemon=True).start()
 
+    def set_paused(self, on):
+        """Pause unloads the model so its VRAM goes back to other apps; resume loads it again."""
+        if on == self.paused:
+            return
+        self.paused = on
+        self.bubble.paused = on
+        if not on:
+            self.load_model(self.model_name)
+            return
+        if self.recording:
+            self.recording = False
+            self.recorder.stop()
+
+        def work():
+            import gc
+            with self.busy:
+                self.engine = None
+                gc.collect()
+                logging.info("paused: model unloaded")
+                self.bridge.state.emit("paused")
+        threading.Thread(target=work, daemon=True).start()
+
     # hotkey thread
     def on_toggle(self):
         if self.recording:
@@ -304,6 +484,9 @@ class App:
             self.on_down()
 
     def on_down(self):
+        if self.paused:
+            logging.info("hotkey ignored: paused")
+            return
         if self.engine is None or self.busy.locked():
             logging.info("hotkey ignored: model %s", "loading" if self.engine is None else "busy")
             return
@@ -358,6 +541,11 @@ class App:
             self.notes.status.setText(f"Model: {self.model_name}")
             self.tray.setToolTip(f"Dictate — {HOW.format(CFG.get('hotkey'))} ({self.model_name})")
             self.bubble.show_msg(f"Ready — {HOW.format(CFG.get('hotkey'))}", "#2563eb", autohide=True)
+        elif s == "paused":
+            self.tray.setIcon(dot_icon("#6b7280"))
+            self.tray.setToolTip("Dictate — paused (tray → uncheck Pause to resume)")
+            self.notes.status.setText("Paused — model unloaded, GPU free")
+            self.bubble.show_msg("❚❚  Paused", "#4b5563")
         elif s == "idle":
             self.bubble.show_idle()
         elif s.startswith("error:"):
@@ -381,6 +569,8 @@ class App:
         logging.info("quit from tray menu")
         self.hotkey.stop()
         self.recorder.close()
+        self.camera.close()
+        self.screen_rec.close()
         self.tray.hide()
         self.bubble.keepalive.stop()
         self.bubble.hide()

@@ -64,9 +64,47 @@ class OnnxEngine:
         return self.model.recognize(audio.astype(np.float32), sample_rate=SR, **kw).strip()
 
 
-def load(name):
+def _is_gpu_error(e):
+    msg = str(e).upper()
+    return any(k in msg for k in ("CUDA", "CUBLAS", "CUDNN", "OUT OF MEMORY"))
+
+
+class FallbackEngine:
+    """Wraps a GPU engine; if CUDA fails (e.g. VRAM taken by a game / LM Studio), reloads on CPU and retries."""
+
+    def __init__(self, name):
+        self.name = name
+        self.engine = _build(name)
+
+    def transcribe(self, audio, language=None):
+        try:
+            return self.engine.transcribe(audio, language=language)
+        except Exception as e:
+            global DEVICE
+            if DEVICE == "cpu" or not _is_gpu_error(e):
+                raise
+            import logging
+            logging.warning("GPU failed (%s); switching %s to CPU", str(e).splitlines()[0][:200], self.name)
+            DEVICE = "cpu"
+            self.engine = None
+            self.engine = _build(self.name)
+            return self.engine.transcribe(audio, language=language)
+
+
+def _build(name):
     kind, model_id, kw = MODELS[name]
     cls = WhisperEngine if kind == "whisper" else OnnxEngine
     engine = cls(model_id, **kw)
     engine.transcribe(np.zeros(SR, dtype=np.float32), language="en")  # warm up
     return engine
+
+
+def load(name):
+    global DEVICE
+    try:
+        return FallbackEngine(name)
+    except Exception as e:
+        if DEVICE == "cpu" or not _is_gpu_error(e):
+            raise
+        DEVICE = "cpu"
+        return FallbackEngine(name)
