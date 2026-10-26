@@ -16,12 +16,16 @@ def available():
     return os.path.exists(EXE)
 
 
-def open_recordly():
-    """Start Recordly, or bring it to the front if it's already open (it keeps a single instance).
+def open_recordly(minimized=False):
+    """Start Recordly. With minimized=True it opens in the taskbar without taking focus, so it waits in
+    the background. (If it is already running it keeps a single instance and comes to the front.)
     Returns False if it isn't built."""
     if not os.path.exists(RECORDLY_EXE):
         return False
-    subprocess.Popen([RECORDLY_EXE], cwd=os.path.dirname(RECORDLY_EXE))
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 7 if minimized else 1  # SW_SHOWMINNOACTIVE / SW_SHOWNORMAL
+    subprocess.Popen([RECORDLY_EXE], cwd=os.path.dirname(RECORDLY_EXE), startupinfo=si)
     return True
 
 

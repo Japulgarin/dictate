@@ -439,12 +439,11 @@ class App:
         elif kind == "saved":
             self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
         elif kind == "studio":
-            self.bubble.show_msg("Video listo: abriendo Recordly", "#2563eb", autohide=True)
-            try:
-                os.startfile(arg)  # plays the studio version right away
-            except OSError as e:
-                logging.warning("can't open %s: %s", arg, e)
-            if not screenrec.open_recordly():
+            # Recordly waits minimized, so the studio render is ready when you want to look at it.
+            if screenrec.open_recordly(minimized=True):
+                self.bubble.show_msg(f"Video listo, Recordly en segundo plano: {os.path.basename(arg)}",
+                                     "#2563eb", autohide=True)
+            else:
                 self.bubble.show_msg("Recordly not built (see app/screenrec.py)", "#7f1d1d", autohide=True)
         elif kind == "error":
             self.bubble.show_msg(f"Error grabando: {arg}", "#7f1d1d", autohide=True)
