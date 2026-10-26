@@ -2,6 +2,7 @@
 helper (rs/target/release/dictate.exe)."""
 import os
 import subprocess
+import logging
 import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -93,3 +94,20 @@ class CameraBubble:
         if self.on:
             self.proc.stdin.write("+\n" if delta > 0 else "-\n")
             self.proc.stdin.flush()
+
+
+def make_vertical(src):
+    """Writes <name>.instagram.mp4: 1080x1920 (9:16) with the screen centred over a blurred copy of itself.
+    Runs ffmpeg, so call it from a worker thread."""
+    dst = os.path.splitext(src)[0] + ".instagram.mp4"
+    vf = ("[0:v]split[a][b];"
+          "[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5[bg];"
+          "[b]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-filter_complex", vf,
+           "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+           "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", dst]
+    r = subprocess.run(cmd, creationflags=NO_WINDOW)
+    if r.returncode != 0:
+        logging.error("instagram version failed for %s", src)
+        return None
+    return dst

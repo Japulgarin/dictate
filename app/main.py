@@ -545,6 +545,11 @@ class App:
         if self.screen_rec.on:
             self._show_rec_status()
 
+    def _make_vertical(self, src):
+        dst = screenrec.make_vertical(src)
+        if dst:
+            self.bridge.screen.emit(f"vertical {dst}")
+
     def on_screen_line(self, line):
         kind, _, arg = line.partition(" ")
         logging.info("screen: %s", line)
@@ -556,12 +561,15 @@ class App:
             self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
         elif kind == "studio":
             os.startfile(arg)  # the rendered video plays right away
+            threading.Thread(target=self._make_vertical, args=(arg,), daemon=True).start()
             # Recordly waits minimized in the background.
             if screenrec.open_recordly(minimized=True):
                 self.bubble.show_msg(f"Video listo, Recordly en segundo plano: {os.path.basename(arg)}",
                                      "#2563eb", autohide=True)
             else:
                 self.bubble.show_msg("Recordly not built (see app/screenrec.py)", "#7f1d1d", autohide=True)
+        elif kind == "vertical":
+            self.bubble.show_msg(f"Versión Instagram lista: {os.path.basename(arg)}", "#2563eb", autohide=True)
         elif kind == "error":
             self.bubble.show_msg(f"Error grabando: {arg}", "#7f1d1d", autohide=True)
 
