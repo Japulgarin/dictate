@@ -131,7 +131,8 @@ fn record_until_stop(cfg: &config::Config) -> anyhow::Result<()> {
 
     let video = rec.stop()?;
     say(&format!("saved {}", video.display()));
-    if cfg.record_studio {
+    // The zoom render is only for the full screen; a half screen stays as recorded.
+    if cfg.record_studio && cfg.record_region == "full" {
         say("rendering");
         match studio::render(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &video) {
             Ok(out) => say(&format!("studio {}", out.display())),

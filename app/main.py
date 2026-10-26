@@ -590,7 +590,8 @@ class App:
         base = video[:-len(".studio.mp4")] if video.endswith(".studio.mp4") else video[:-len(".mp4")]
         self._copy_to_studio(*dict.fromkeys([base + ".mp4", video, base + ".cursor.csv"]))
         os.startfile(video)  # plays right away
-        threading.Thread(target=self._make_vertical, args=(video,), daemon=True).start()
+        if self.region == "full":  # half-screen recordings stay as recorded: no render, no vertical version
+            threading.Thread(target=self._make_vertical, args=(video,), daemon=True).start()
         if screenrec.open_recordly(minimized=True):
             self.bubble.show_msg(f"Video listo, Recordly en segundo plano: {os.path.basename(video)}",
                                  "#2563eb", autohide=True)

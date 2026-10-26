@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// How far to zoom in on a click.
-const ZOOM: f64 = 1.8;
+const ZOOM: f64 = 1.3;
 /// Seconds to ease in and out of a zoom.
 const RAMP_S: f64 = 0.45;
 /// Start zooming this long before the click.
@@ -280,7 +280,7 @@ mod tests {
     fn exprs_use_fractions_of_the_screen() {
         let seg = Segment { start: 1.0, end: 3.0, x: 960.0, y: 270.0 };
         let (z, x, y) = zoom_exprs(&[seg], (1920.0, 1080.0));
-        assert!(z.starts_with("1+0.800*"));
+        assert!(z.starts_with("1+0.300*"));
         assert!(x.contains("0.50000*iw"));
         assert!(y.contains("0.25000*ih"));
     }
