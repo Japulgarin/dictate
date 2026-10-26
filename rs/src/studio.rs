@@ -156,7 +156,7 @@ pub fn render(ffmpeg: &str, encoder: &str, fps: u32, video: &Path) -> Result<Pat
 
     let dur = format!("{duration:.3}");
     let graph = format!(
-        "[0:v]zoompan=z='{z}':x='{x}':y='{y}':d=1:s={w}x{h}:fps={fps},scale={fw}:{fh},format=yuva420p[fg0];\
+        "[0:v]fps={fps},zoompan=z='{z}':x='{x}':y='{y}':d=1:s={w}x{h}:fps={fps},scale={fw}:{fh},format=yuva420p[fg0];\
          [1:v]format=gray,scale={fw}:{fh}[m];\
          [fg0][m]alphamerge[fg];\
          gradients=s={w}x{h}:c0={BG_TOP}:c1={BG_BOTTOM}:x0=0:y0=0:x1={w}:y1={h}:r={fps}:d={dur}[bg];\

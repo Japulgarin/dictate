@@ -48,7 +48,7 @@ impl Recorder {
 
         let single = cfg.record_mic && !cfg.mic_device.is_empty();
         let (video, video_tmp) = if single {
-            (spawn_av(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.mic_device, &cfg.record_region, &out)?, out.clone())
+            (spawn_av(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.mic_device, cfg.audio_delay_s, &cfg.record_region, &out)?, out.clone())
         } else {
             (spawn_video(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.record_region, &video_tmp)?, video_tmp)
         };
@@ -183,13 +183,14 @@ fn capture_args(region: &str) -> Vec<String> {
 }
 
 /// Screen (gdigrab) and microphone (dshow) in one ffmpeg process, written straight to `out`.
-fn spawn_av(ffmpeg: &str, encoder: &str, fps: u32, mic: &str, region: &str, out: &Path) -> Result<Child> {
+fn spawn_av(ffmpeg: &str, encoder: &str, fps: u32, mic: &str, audio_delay: f32, region: &str, out: &Path) -> Result<Child> {
     let child = Command::new(ffmpeg)
         .args(["-hide_banner", "-loglevel", "error", "-y"])
         .args(["-f", "gdigrab", "-framerate", &fps.to_string()])
         .args(capture_args(region))
         .args(["-i", "desktop"])
-        .args(["-f", "dshow", "-i", &format!("audio={mic}")])
+        .args(["-itsoffset", &format!("{audio_delay:.3}"), "-f", "dshow", "-i", &format!("audio={mic}")])
+        .args(["-vf", &format!("fps={fps}")])  // constant rate by timestamp: dropped frames are repeated
         .args(["-c:v", encoder, "-pix_fmt", "yuv420p"])
         .args(quality_args(encoder))
         .args(["-c:a", "aac", "-b:a", "160k"])

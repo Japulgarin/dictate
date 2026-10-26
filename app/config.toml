@@ -15,3 +15,4 @@ screen_hotkey = "shift+cmd+alt"    # start/stop a screen recording (cmd = Window
 restart_hotkey = "cmd+alt+z"       # restart Dictate
 recordings_dir = "C:/Users/inven/Videos/Dictate"  # local folder on this computer, outside OneDrive
 mic_device = "Microphone Array (Realtek(R) Audio)"  # ffmpeg dshow name: screen + mic recorded in one process (in sync)
+audio_delay_s = 0.26  # measured: the mic starts 0.26 s after the first screen frame; raise it if the voice comes before the picture, lower if after

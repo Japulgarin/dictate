@@ -25,6 +25,9 @@ pub struct Config {
     /// Microphone name as ffmpeg lists it (dshow). When set, screen and mic are recorded by one ffmpeg
     /// process, so both share one clock and stay in sync. Empty = the separate cpal capture.
     pub mic_device: String,
+    /// Seconds to delay the mic against the screen. The mic starts after the first frame, and ffmpeg
+    /// lines both up at 0, so the audio plays early; raise this until voice and picture match.
+    pub audio_delay_s: f32,
     /// Which part of the desktop to record: "full", "left" or "right" half (for vertical formats).
     pub record_region: String,
     pub recordings_dir: String,
@@ -60,6 +63,7 @@ impl Default for Config {
             record_encoder: "libx264".into(),
             record_mic: true,
             mic_device: String::new(),
+            audio_delay_s: 0.0,
             record_region: "full".into(),
             recordings_dir: "recordings".into(),
             camera_device: String::new(),
