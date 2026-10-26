@@ -584,6 +584,19 @@ class App:
         if dst:
             self.bridge.screen.emit(f"vertical {dst}")
 
+    def _recording_ready(self, video):
+        """The final video exists (plain or studio): copy it to AI Studio, play it, start the vertical
+        version, and leave Recordly open in the background."""
+        base = video[:-len(".studio.mp4")] if video.endswith(".studio.mp4") else video[:-len(".mp4")]
+        self._copy_to_studio(*dict.fromkeys([base + ".mp4", video, base + ".cursor.csv"]))
+        os.startfile(video)  # plays right away
+        threading.Thread(target=self._make_vertical, args=(video,), daemon=True).start()
+        if screenrec.open_recordly(minimized=True):
+            self.bubble.show_msg(f"Video listo, Recordly en segundo plano: {os.path.basename(video)}",
+                                 "#2563eb", autohide=True)
+        else:
+            self.bubble.show_msg("Recordly not built (see app/screenrec.py)", "#7f1d1d", autohide=True)
+
     def on_screen_line(self, line):
         kind, _, arg = line.partition(" ")
         logging.info("screen: %s", line)
@@ -592,18 +605,12 @@ class App:
             self.rec_timer.start(1000)
             self._show_rec_status()
         elif kind == "saved":
-            self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
+            if CFG.get("record_studio", True):
+                self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
+            else:  # no studio render: the plain recording is the final video
+                self._recording_ready(arg)
         elif kind == "studio":
-            base = arg[:-len(".studio.mp4")]
-            self._copy_to_studio(base + ".mp4", arg, base + ".cursor.csv")
-            os.startfile(arg)  # the rendered video plays right away
-            threading.Thread(target=self._make_vertical, args=(arg,), daemon=True).start()
-            # Recordly waits minimized in the background.
-            if screenrec.open_recordly(minimized=True):
-                self.bubble.show_msg(f"Video listo, Recordly en segundo plano: {os.path.basename(arg)}",
-                                     "#2563eb", autohide=True)
-            else:
-                self.bubble.show_msg("Recordly not built (see app/screenrec.py)", "#7f1d1d", autohide=True)
+            self._recording_ready(arg)
         elif kind == "vertical":
             self._copy_to_studio(arg)
             self.bubble.show_msg(f"Versión Instagram lista: {os.path.basename(arg)}", "#2563eb", autohide=True)
