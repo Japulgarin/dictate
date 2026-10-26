@@ -130,6 +130,12 @@ def glyph_icon(kind):
     return QIcon(pm)
 
 
+def btn_css(bg, radius):
+    return (f"QPushButton{{background:{bg};border:2px solid rgba(255,255,255,70);border-radius:{radius}px;}}"
+            "QPushButton:hover{border-color:white;}"
+            "QPushButton:checked{background:#22c55e;border-color:white;}")
+
+
 class Bridge(QObject):
     """Thread-safe signals from the hotkey/worker threads into the Qt main thread."""
     state = Signal(str)          # "listening" | "transcribing" | "idle" | "loading" | "error:<msg>"
@@ -168,10 +174,6 @@ class Bubble(QWidget):
         lay.addWidget(self.close_btn, 0, Qt.AlignTop)
         # Controls that pop up next to the dot when you click it: small round buttons with drawn icons,
         # one colour each, in the order camera, record screen, notes, pause.
-        def btn_css(bg):
-            return (f"QPushButton{{background:{bg};border:2px solid rgba(255,255,255,70);border-radius:14px;}}"
-                    "QPushButton:hover{border-color:white;}"
-                    "QPushButton:checked{background:#22c55e;border-color:white;}")
         self.cam_btn = QPushButton(self)
         self.rec_btn = QPushButton(self)
         self.notes_btn = QPushButton(self)
@@ -183,17 +185,17 @@ class Bubble(QWidget):
                 (self.notes_btn, "#7c3aed", "notes", "Notes", self.notes_clicked),
                 (self.pause_btn, "#d97706", "pause", "Pause (free GPU)", self.pause_clicked)]
         self.ctrl_btns = [b for b, *_ in spec]
+        self.ctrl_bg = {b: bg for b, bg, *_ in spec}
+        self.scale = 1.0
         for b, bg, icon, tip, signal in spec:
-            b.setFixedSize(28, 28)
             b.setIcon(glyph_icon(icon))
-            b.setIconSize(QSize(16, 16))
             b.setToolTip(tip)
             b.setCursor(Qt.PointingHandCursor)
             b.setFocusPolicy(Qt.NoFocus)
-            b.setStyleSheet(btn_css(bg))
             b.hide()
             b.clicked.connect(signal)
             lay.addWidget(b)
+        self._style_buttons()
         self.paused = False
         self.camera_on = False
         self.screen_on = False
@@ -243,13 +245,31 @@ class Bubble(QWidget):
             scr = QApplication.primaryScreen().availableGeometry()
             self.move(scr.right() - self.width() - 24, scr.bottom() - self.height() - 24)
 
+    def set_scale(self, s):
+        """Bigger or smaller bubble (tray → Bubble size, or bubble_scale in config.toml)."""
+        self.scale = s
+        self.label.setFont(QFont("Segoe UI", round(10 * s)))
+        self.close_btn.setFixedSize(round(20 * s), round(20 * s))
+        pad = round(10 * s)
+        self.layout().setContentsMargins(round(16 * s), pad, round(16 * s), pad)
+        self._style_buttons()
+        self.adjustSize()
+        self._reanchor()
+
+    def _style_buttons(self):
+        side = round(28 * self.scale)
+        for b in self.ctrl_btns:
+            b.setFixedSize(side, side)
+            b.setIconSize(QSize(round(16 * self.scale), round(16 * self.scale)))
+            b.setStyleSheet(btn_css(self.ctrl_bg[b], side // 2))
+
     def show_msg(self, text, color, autohide=False):
         for b in self.ctrl_btns:
             b.hide()
         self.close_btn.show()
         self.color = QColor(color)
         self.label.setText(text)
-        self.label.setMaximumWidth(380)
+        self.label.setMaximumWidth(round(380 * self.scale))
         self.adjustSize()
         self._reanchor()
         self.show()
@@ -331,6 +351,7 @@ class App:
         self.bridge.state.connect(self.on_state)
         self.bridge.result.connect(self.on_result)
         self.bubble = Bubble()
+        self.bubble.set_scale(CFG.get("bubble_scale", 1.0))
         self.notes = NotesWindow()
         self.bubble.clicked.connect(self.on_bubble_click)
         self.bubble.pause_clicked.connect(lambda: self.pause_action.setChecked(not self.paused))
@@ -376,6 +397,13 @@ class App:
             a.triggered.connect(lambda _=False, c=code: setattr(self, "language", c))
             lgrp.addAction(a)
             langs.addAction(a)
+        sizes = menu.addMenu("Bubble size")
+        sgrp = QActionGroup(menu)
+        for name, s in (("Small", 0.7), ("Normal", 1.0), ("Large", 1.4), ("Extra large", 1.8)):
+            a = QAction(name, sizes, checkable=True, checked=(s == CFG.get("bubble_scale", 1.0)))
+            a.triggered.connect(lambda _=False, v=s: self.bubble.set_scale(v))
+            sgrp.addAction(a)
+            sizes.addAction(a)
         paste = QAction("Auto-paste", menu, checkable=True, checked=self.auto_paste)
         paste.toggled.connect(lambda on: setattr(self, "auto_paste", on))
         menu.addAction(paste)

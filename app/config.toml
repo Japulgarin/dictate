@@ -6,6 +6,7 @@ hotkey = "ctrl+cmd"                # cmd = Windows key. e.g. "ctrl+alt", "ctrl+s
 hotkey_mode = "toggle"             # "toggle" = press once to start, again to stop; "hold" = hold to talk
 auto_paste = true                  # paste the text where your cursor is when you stop (still copied to clipboard too)
 bubble_hide_after_s = 4
+bubble_scale = 1.0                 # bubble size: 0.7 small, 1.0 normal, 1.4 large, 1.8 extra large (also tray → Bubble size)
 silence_rms = 0.01                 # raise if background noise gets transcribed, lower if quiet speech is skipped
 preroll_s = 0.3                    # audio kept from just before you press the hotkey (so the first word isn't cut)
 # apps where paste is Ctrl+Shift+V instead of Ctrl+V (add yours if a terminal doesn't get the text)
