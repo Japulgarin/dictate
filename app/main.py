@@ -118,6 +118,14 @@ def glyph_icon(kind):
         p.drawEllipse(14, 14, 36, 36)
     elif kind == "stop":
         p.drawRoundedRect(16, 16, 32, 32, 5, 5)
+    elif kind == "full":
+        p.setPen(QPen(white, 4, Qt.SolidLine, Qt.RoundCap))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(8, 14, 48, 34, 4, 4)
+        p.drawLine(24, 52, 40, 52)
+    elif kind in ("left", "right"):
+        xs = (14, 50, 50) if kind == "left" else (50, 14, 14)
+        p.drawPolygon(QPolygon([QPoint(xs[0], 32), QPoint(xs[1], 14), QPoint(xs[2], 50)]))
     elif kind == "minus":
         p.drawRoundedRect(12, 28, 40, 8, 4, 4)
     elif kind == "plus":
@@ -156,6 +164,7 @@ class Bubble(QWidget):
     notes_clicked = Signal()
     record_clicked = Signal()
     camera_clicked = Signal()
+    region_clicked = Signal()
     cam_resize = Signal(int)     # −20 / +20: make the floating camera circle smaller / bigger
 
     def __init__(self):
@@ -186,12 +195,14 @@ class Bubble(QWidget):
         self.rec_btn = QPushButton(self)
         self.notes_btn = QPushButton(self)
         self.pause_btn = QPushButton(self)
+        self.region_btn = QPushButton(self)
         self.cam_btn.setCheckable(True)  # green while the camera is on
         self.rec_btn.setCheckable(True)  # green while a screen recording is running
         spec = [(self.cam_btn, "#0d9488", "camera", "Show camera", self.camera_clicked),
                 (self.rec_btn, "#e11d48", "record", "Record screen", self.record_clicked),
                 (self.notes_btn, "#7c3aed", "notes", "Notes", self.notes_clicked),
-                (self.pause_btn, "#d97706", "pause", "Pause (free GPU)", self.pause_clicked)]
+                (self.pause_btn, "#d97706", "pause", "Pause (free GPU)", self.pause_clicked),
+                (self.region_btn, "#6366f1", "full", "Pantalla completa", self.region_clicked)]
         self.ctrl_btns = [b for b, *_ in spec]
         self.ctrl_bg = {b: bg for b, bg, *_ in spec}
         self.scale = 1.0
@@ -309,6 +320,12 @@ class Bubble(QWidget):
             b.setFixedSize(side, side)
             b.setIconSize(QSize(icon, icon))
             b.setStyleSheet(btn_css(self.ctrl_bg[b], side // 2))
+
+    def set_region(self, region):
+        """Icon and tooltip of the screen-part button: a box for full, an arrow for left / right."""
+        self.region_btn.setIcon(glyph_icon(region))
+        names = {"full": "Pantalla completa", "left": "Mitad izquierda", "right": "Mitad derecha"}
+        self.region_btn.setToolTip(names[region] + " (clic para cambiar)")
 
     def show_recording(self, text):
         """While a screen recording runs: a big red timer and only the stop button."""
@@ -434,9 +451,12 @@ class App:
         self.bubble.camera_clicked.connect(self.toggle_camera)
         self.camera = screenrec.CameraBubble()
         self.bubble.cam_resize.connect(self.camera.resize)
-        self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit, CFG.get("recordings_dir", ""))
+        self.region = CFG.get("record_region", "full")
+        self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit, CFG.get("recordings_dir", ""), self.region)
+        self.bubble.set_region(self.region)
         self.bridge.screen.connect(self.on_screen_line)
         self.bridge.toggle_screen.connect(self.toggle_screen_recording)
+        self.bubble.region_clicked.connect(self.cycle_region)
         self.bridge.restart_app.connect(self.restart)
         # Extra global hotkeys: start/stop a screen recording, and restart the app.
         self.screen_hotkey = HoldHotkey(CFG.get("screen_hotkey", "shift+cmd+alt"),
@@ -521,6 +541,14 @@ class App:
             return False
         self.bubble.show_msg("Recorder not built: cd rs && cargo build --release", "#7f1d1d", autohide=True)
         return True
+
+    def cycle_region(self):
+        """Pause-row button: full screen → left half → right half → full. Applies to the next recording."""
+        order = ["full", "left", "right"]
+        self.region = order[(order.index(self.region) + 1) % len(order)]
+        self.screen_rec.region = self.region
+        self.bubble.set_region(self.region)
+        self.bubble.show_msg(f"Próxima grabación: {self.region}", "#4b5563", autohide=True)
 
     def toggle_screen_recording(self):
         """Red button: start or stop a screen recording. Stopping saves it and renders the studio version;

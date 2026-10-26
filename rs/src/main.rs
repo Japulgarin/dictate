@@ -78,6 +78,9 @@ fn main() -> anyhow::Result<()> {
     if let Some(dir) = value("--out") {
         cfg.recordings_dir = dir;
     }
+    if let Some(region) = value("--region") {
+        cfg.record_region = region; // "full", "left" or "right"
+    }
 
     if flag("--record") {
         if let Err(e) = record_until_stop(&cfg) {

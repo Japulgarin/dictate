@@ -48,9 +48,9 @@ impl Recorder {
 
         let single = cfg.record_mic && !cfg.mic_device.is_empty();
         let (video, video_tmp) = if single {
-            (spawn_av(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.mic_device, &out)?, out.clone())
+            (spawn_av(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.mic_device, &cfg.record_region, &out)?, out.clone())
         } else {
-            (spawn_video(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &video_tmp)?, video_tmp)
+            (spawn_video(&cfg.ffmpeg, &cfg.record_encoder, cfg.record_fps, &cfg.record_region, &video_tmp)?, video_tmp)
         };
 
         let cursor = if cfg.record_cursor {
@@ -163,11 +163,32 @@ pub fn quality_args(encoder: &str) -> &'static [&'static str] {
     }
 }
 
+/// The part of the desktop to record as gdigrab input options: the full screen, or its left or right half.
+fn capture_args(region: &str) -> Vec<String> {
+    use windows::Win32::UI::WindowsAndMessaging::SetProcessDPIAware;
+    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    // gdigrab works in real pixels: without this, a 125 % display reports its smaller logical size.
+    let (w, h) = unsafe {
+        let _ = SetProcessDPIAware();
+        (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN))
+    };
+    let half = (w / 2) & !1; // even sizes, needed by h264
+    let h = h & !1;
+    let x = match region {
+        "left" => 0,
+        "right" => w - half,
+        _ => return Vec::new(),
+    };
+    vec!["-offset_x".into(), x.to_string(), "-video_size".into(), format!("{half}x{h}")]
+}
+
 /// Screen (gdigrab) and microphone (dshow) in one ffmpeg process, written straight to `out`.
-fn spawn_av(ffmpeg: &str, encoder: &str, fps: u32, mic: &str, out: &Path) -> Result<Child> {
+fn spawn_av(ffmpeg: &str, encoder: &str, fps: u32, mic: &str, region: &str, out: &Path) -> Result<Child> {
     let child = Command::new(ffmpeg)
         .args(["-hide_banner", "-loglevel", "error", "-y"])
-        .args(["-f", "gdigrab", "-framerate", &fps.to_string(), "-i", "desktop"])
+        .args(["-f", "gdigrab", "-framerate", &fps.to_string()])
+        .args(capture_args(region))
+        .args(["-i", "desktop"])
         .args(["-f", "dshow", "-i", &format!("audio={mic}")])
         .args(["-c:v", encoder, "-pix_fmt", "yuv420p"])
         .args(quality_args(encoder))
@@ -180,10 +201,12 @@ fn spawn_av(ffmpeg: &str, encoder: &str, fps: u32, mic: &str, out: &Path) -> Res
     Ok(child)
 }
 
-fn spawn_video(ffmpeg: &str, encoder: &str, fps: u32, out: &Path) -> Result<Child> {
+fn spawn_video(ffmpeg: &str, encoder: &str, fps: u32, region: &str, out: &Path) -> Result<Child> {
     let child = Command::new(ffmpeg)
         .args(["-hide_banner", "-loglevel", "error", "-y"])
-        .args(["-f", "gdigrab", "-framerate", &fps.to_string(), "-i", "desktop"])
+        .args(["-f", "gdigrab", "-framerate", &fps.to_string()])
+        .args(capture_args(region))
+        .args(["-i", "desktop"])
         .args(["-c:v", encoder, "-pix_fmt", "yuv420p"])
         .args(quality_args(encoder))
         .arg(out)
