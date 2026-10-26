@@ -40,9 +40,10 @@ class ScreenRecorder:
     """Runs `dictate.exe --record`: screen + mic + cursor until its stdin closes. It prints one line per
     step (recording, saved <mp4>, rendering, studio <mp4>, error <msg>); each line goes to on_line."""
 
-    def __init__(self, on_line):
+    def __init__(self, on_line, out_dir=""):
         self.proc = None
         self.on_line = on_line
+        self.out_dir = out_dir  # where the videos are saved (empty = the helper's default folder)
 
     @property
     def on(self):
@@ -53,7 +54,8 @@ class ScreenRecorder:
             self.proc.stdin.close()  # EOF tells it to stop, save and render
             self.proc = None
         else:
-            self.proc = _spawn(["--record"], subprocess.PIPE)
+            args = ["--record", "--out", self.out_dir] if self.out_dir else ["--record"]
+            self.proc = _spawn(args, subprocess.PIPE)
             threading.Thread(target=self._read, args=(self.proc,), daemon=True).start()
 
     def _read(self, proc):

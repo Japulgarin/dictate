@@ -430,7 +430,7 @@ class App:
         self.bubble.camera_clicked.connect(self.toggle_camera)
         self.camera = screenrec.CameraBubble()
         self.bubble.cam_resize.connect(self.camera.resize)
-        self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit)
+        self.screen_rec = screenrec.ScreenRecorder(self.bridge.screen.emit, CFG.get("recordings_dir", ""))
         self.bridge.screen.connect(self.on_screen_line)
         self.bridge.toggle_screen.connect(self.toggle_screen_recording)
         self.bridge.restart_app.connect(self.restart)
@@ -548,7 +548,8 @@ class App:
         elif kind == "saved":
             self.bubble.show_msg("Video guardado, renderizando…", "#4b5563")
         elif kind == "studio":
-            # Recordly waits minimized, so the studio render is ready when you want to look at it.
+            os.startfile(arg)  # the rendered video plays right away
+            # Recordly waits minimized in the background.
             if screenrec.open_recordly(minimized=True):
                 self.bubble.show_msg(f"Video listo, Recordly en segundo plano: {os.path.basename(arg)}",
                                      "#2563eb", autohide=True)

@@ -13,3 +13,4 @@ preroll_s = 0.3                    # audio kept from just before you press the h
 terminal_apps = ["WindowsTerminal.exe", "OpenConsole.exe", "conhost.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "wezterm-gui.exe", "alacritty.exe", "mintty.exe", "Hyper.exe", "Tabby.exe", "Warp.exe", "kitty.exe"]
 screen_hotkey = "shift+cmd+alt"    # start/stop a screen recording (cmd = Windows key)
 restart_hotkey = "cmd+alt+z"       # restart Dictate
+recordings_dir = "C:/Users/inven/OneDrive/Escritorio/Jobs_germany/content/recordings"  # where screen recordings are saved (AI Studio folder)
